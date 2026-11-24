@@ -369,33 +369,25 @@ proc ::rawg::search_game {target query mode} {
     api_get $path ::rawg::search_done [list $target $query $mode]
 }
 
-proc ::rawg::report_lookup_error {target mode message} {
-    if {![string equal -nocase $mode "AUTO"]} {
-        putquick "PRIVMSG $target :$message"
-    } else {
-        log "AUTO LOOKUP NOTICE SUPPRESSED: $message"
-    }
-}
-
 proc ::rawg::search_done {context data} {
     lassign $context target query mode
     log "SEARCH CALLBACK: query=$query mode=$mode bytes=[string length $data]"
 
     if {$data eq ""} {
-        report_lookup_error $target $mode "RAWG: No API response. Check the API key, network and log."
+        putquick  "PRIVMSG $target :RAWG: No API response. Check the API key, network and log."
         return
     }
 
     set decoded [decode $data]
     if {$decoded eq ""} {
-        report_lookup_error $target $mode "RAWG: Could not decode the API response."
+        putquick  "PRIVMSG $target :RAWG: Could not decode the API response."
         return
     }
 
     set results [get $decoded results]
     log "SEARCH PARSED: query=$query result_count=[llength $results]"
     if {[llength $results] == 0} {
-        report_lookup_error $target $mode "RAWG: No game found for: $query"
+        putquick  "PRIVMSG $target :RAWG: No game found for: $query"
         return
     }
 
@@ -424,7 +416,7 @@ proc ::rawg::search_done {context data} {
     set id [get $selected id]
     log "SEARCH SELECTED: query=$query game=[get $selected name] id=$id score=$best_score"
     if {$id eq ""} {
-        report_lookup_error $target $mode "RAWG: Search result did not contain a game ID."
+        putquick  "PRIVMSG $target :RAWG: Search result did not contain a game ID."
         return
     }
 
@@ -452,7 +444,6 @@ proc ::rawg::search_result_score {query result_name} {
     if {$main_word eq "" || [lsearch -exact $result_words $main_word] < 0} {
         return -1
     }
-
 
     set score 500
     foreach word $query_words {
@@ -482,13 +473,13 @@ proc ::rawg::details_done {context data} {
     log "DETAILS CALLBACK: query=$query mode=$mode bytes=[string length $data]"
 
     if {$data eq ""} {
-        report_lookup_error $target $mode "RAWG: No game details received."
+        putquick  "PRIVMSG $target :RAWG: No game details received."
         return
     }
 
     set game [decode $data]
     if {$game eq ""} {
-        report_lookup_error $target $mode "RAWG: Could not decode game details."
+        putquick  "PRIVMSG $target :RAWG: Could not decode game details."
         return
     }
 
@@ -496,13 +487,13 @@ proc ::rawg::details_done {context data} {
     log "DETAILS PARSED: name=$game_name id=[get $game id]"
     set game_id [get $game id]
     if {$game_name eq "" || $game_id eq ""} {
-        report_lookup_error $target $mode "RAWG: Game details are incomplete."
+        putquick  "PRIVMSG $target :RAWG: Game details are incomplete."
         return
     }
 
-    if {[string equal -nocase $mode "PREVIEW"]} {
+    if {$mode eq "preview"} {
         announce_game $target $game "PREVIEW"
-    } elseif {[string equal -nocase $mode "AUTO"]} {
+    } elseif {$mode eq "auto"} {
         announce_game $target $game "AUTO"
     } else {
         #announce_game $target $game "INFO"
@@ -659,6 +650,9 @@ proc ::rawg::pub_preview {nick host hand chan text} {
     search_game $chan $query "PREVIEW"
 }
 
+# -----------------------------------------------------------------------------
+# PZS-NG AUTOMATIC NEWDIR EVENT
+# -----------------------------------------------------------------------------
 
 proc ::rawg::release_to_title {release} {
     set title [string trim [file tail [string map {\\ /} $release]]]
@@ -670,7 +664,6 @@ proc ::rawg::release_to_title {release} {
         regsub -nocase -- {-[a-z0-9][a-z0-9_-]*$} $title {} title
     }
 
-    # Remove platform markers at the end of console release names.
     regsub -nocase {([._ -]+)(PS5|PS4|PS3|PS2|NSW|SWITCH|NINTENDO[._ ]SWITCH|XBOX[._ ]?(ONE|SERIES[._ ]?X|SERIES[._ ]?S)?)([._ -].*)?$} $title {} title
     regsub -nocase {[._ -]+UPDATE([._ -].*)?$} $title {} title
     regsub -nocase {[._ -]+PLUS[._ -]+[0-9]+[._ -]+TRAINER([._ -].*)?$} $title {} title
@@ -680,7 +673,7 @@ proc ::rawg::release_to_title {release} {
     regsub -nocase {[._ -]+MASTER[._ -]+COLLECTION[._ -]+VERSION$} $title {} title
     regsub -nocase {[._ -]+v[0-9]+([._-][0-9a-z]+)*.*$} $title {} title
     regsub -- {[._ -]+(19[0-9]{2}|20[0-9]{2})$} $title {} title
-
+    
     set title [string map [list "." " " "_" " " "-" " "] $title]
     regsub -all {\s+} $title { } title
     return [string trim $title]
@@ -688,7 +681,7 @@ proc ::rawg::release_to_title {release} {
 
 proc ::rawg::valid_game_path {path} {
     variable cfg
-
+    
     set normalized [string map {\\ /} [string trim $path]]
     set normalized [string trimright $normalized "/"]
     if {$normalized eq ""} { return 0 }
@@ -869,7 +862,6 @@ proc ::rawg::init {} {
         }
     }
 
-    # Enable HTTPS for Tcllib http.
     catch {::http::register https 443 [list ::tls::socket -autoservername 1]}
 
     variable gameinfo_bound_trigger
