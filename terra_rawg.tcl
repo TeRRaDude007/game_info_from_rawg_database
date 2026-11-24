@@ -369,25 +369,33 @@ proc ::rawg::search_game {target query mode} {
     api_get $path ::rawg::search_done [list $target $query $mode]
 }
 
+proc ::rawg::report_lookup_error {target mode message} {
+    if {![string equal -nocase $mode "AUTO"]} {
+        putquick "PRIVMSG $target :$message"
+    } else {
+        log "AUTO LOOKUP NOTICE SUPPRESSED: $message"
+    }
+}
+
 proc ::rawg::search_done {context data} {
     lassign $context target query mode
     log "SEARCH CALLBACK: query=$query mode=$mode bytes=[string length $data]"
 
     if {$data eq ""} {
-        putquick  "PRIVMSG $target :RAWG: No API response. Check the API key, network and log."
+        report_lookup_error $target $mode "RAWG: No API response. Check the API key, network and log."
         return
     }
 
     set decoded [decode $data]
     if {$decoded eq ""} {
-        putquick  "PRIVMSG $target :RAWG: Could not decode the API response."
+        report_lookup_error $target $mode "RAWG: Could not decode the API response."
         return
     }
 
     set results [get $decoded results]
     log "SEARCH PARSED: query=$query result_count=[llength $results]"
     if {[llength $results] == 0} {
-        putquick  "PRIVMSG $target :RAWG: No game found for: $query"
+        report_lookup_error $target $mode "RAWG: No game found for: $query"
         return
     }
 
@@ -416,7 +424,7 @@ proc ::rawg::search_done {context data} {
     set id [get $selected id]
     log "SEARCH SELECTED: query=$query game=[get $selected name] id=$id score=$best_score"
     if {$id eq ""} {
-        putquick  "PRIVMSG $target :RAWG: Search result did not contain a game ID."
+        report_lookup_error $target $mode "RAWG: Search result did not contain a game ID."
         return
     }
 
@@ -445,6 +453,7 @@ proc ::rawg::search_result_score {query result_name} {
         return -1
     }
 
+
     set score 500
     foreach word $query_words {
         if {$word eq $main_word} { continue }
@@ -453,7 +462,6 @@ proc ::rawg::search_result_score {query result_name} {
         }
     }
 
-    # Prefer close phrase matches when the main title keyword is present.
     if {[string first $query_title $result_title] >= 0 ||
         [string first $result_title $query_title] >= 0} {
         incr score 25
@@ -474,13 +482,13 @@ proc ::rawg::details_done {context data} {
     log "DETAILS CALLBACK: query=$query mode=$mode bytes=[string length $data]"
 
     if {$data eq ""} {
-        putquick  "PRIVMSG $target :RAWG: No game details received."
+        report_lookup_error $target $mode "RAWG: No game details received."
         return
     }
 
     set game [decode $data]
     if {$game eq ""} {
-        putquick  "PRIVMSG $target :RAWG: Could not decode game details."
+        report_lookup_error $target $mode "RAWG: Could not decode game details."
         return
     }
 
@@ -488,13 +496,13 @@ proc ::rawg::details_done {context data} {
     log "DETAILS PARSED: name=$game_name id=[get $game id]"
     set game_id [get $game id]
     if {$game_name eq "" || $game_id eq ""} {
-        putquick  "PRIVMSG $target :RAWG: Game details are incomplete."
+        report_lookup_error $target $mode "RAWG: Game details are incomplete."
         return
     }
 
-    if {$mode eq "preview"} {
+    if {[string equal -nocase $mode "PREVIEW"]} {
         announce_game $target $game "PREVIEW"
-    } elseif {$mode eq "auto"} {
+    } elseif {[string equal -nocase $mode "AUTO"]} {
         announce_game $target $game "AUTO"
     } else {
         #announce_game $target $game "INFO"
@@ -602,6 +610,7 @@ proc ::rawg::announce_game {target game mode} {
     log "ANNOUNCEMENT QUEUED: target=$target mode=$mode"
 }
 
+
 proc ::rawg::command_allowed {hand} {
     variable cfg
     if {$cfg(command_flags) eq "-" || $cfg(command_flags) eq ""} {
@@ -650,16 +659,18 @@ proc ::rawg::pub_preview {nick host hand chan text} {
     search_game $chan $query "PREVIEW"
 }
 
+
 proc ::rawg::release_to_title {release} {
     set title [string trim [file tail [string map {\\ /} $release]]]
     if {$title eq ""} { return "" }
-    
+
     set release_hyphen_count [regexp -all -- {-} $title]
     regsub -nocase -- {-(RUNE|TENOKE|DINOByTES|HOODLUM|I_KnoW|FCKDRM|Razor1911|FLT|DUPLEX|UNLiMiTED|LiGHTFORCE|SUXXORS|HR|BREWS)$} $title {} title
     if {$release_hyphen_count == 1 && [regexp {[._]} $title]} {
         regsub -nocase -- {-[a-z0-9][a-z0-9_-]*$} $title {} title
     }
-    
+
+    # Remove platform markers at the end of console release names.
     regsub -nocase {([._ -]+)(PS5|PS4|PS3|PS2|NSW|SWITCH|NINTENDO[._ ]SWITCH|XBOX[._ ]?(ONE|SERIES[._ ]?X|SERIES[._ ]?S)?)([._ -].*)?$} $title {} title
     regsub -nocase {[._ -]+UPDATE([._ -].*)?$} $title {} title
     regsub -nocase {[._ -]+PLUS[._ -]+[0-9]+[._ -]+TRAINER([._ -].*)?$} $title {} title
@@ -736,10 +747,6 @@ proc ::rawg {event section logData} {
     return [::rawg::LogEvent $event $section $logData]
 }
 
-# -----------------------------------------------------------------------------
-# SANDBOX / DIAGNOSTICS
-# -----------------------------------------------------------------------------
-
 proc ::rawg::sandbox_test {} {
     variable cfg
     log "SANDBOX TEST STARTED"
@@ -753,10 +760,6 @@ proc ::rawg::sandbox_test {} {
     log "No API requests will be sent by this diagnostic."
     log "SANDBOX TEST FINISHED"
 }
-
-# -----------------------------------------------------------------------------
-# INITIALIZATION AND CLEAN UNLOAD
-# -----------------------------------------------------------------------------
 
 proc ::rawg::register_pzs {{quiet 0}} {
     variable scriptName
@@ -876,8 +879,6 @@ proc ::rawg::init {} {
         return
     }
 
-    # Remove the previous configured binding when the script is reloaded
-    # with a different trigger.
     if {$gameinfo_bound_trigger ne ""} {
         catch {unbind pub - $gameinfo_bound_trigger ::rawg::pub_gameinfo}
     }
@@ -893,8 +894,6 @@ proc ::rawg::init {} {
     bind evnt - prerestart ::rawg::unload
     bind evnt - init-server ::rawg::schedule_pzs_registration
 
-    # PZS-NG may initialize its command lists after RAWG is sourced.
-    # Delay registration and retry briefly instead of failing on load order.
     schedule_pzs_registration
 
     putlog "RAWG: PZS-NG NEWDIR registration scheduled (checks every 5 seconds if needed)."
