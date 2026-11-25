@@ -20,7 +20,7 @@
 #   2.0.0 Alpha
 #     - Merge rawg/steam into one script.
 #
-# Requires: Eggdrop 1.9.x, Tcl 8.6+, Tcllib http, json, tls
+# Requires: Eggdrop 1.9.x, Tcl 8.6+, Tcllib http, json, tls, API key (https://rawg.io/@traver/apikey)
 #
 # Flow:
 #     PZS-NG NEWDIR (inside announce_dirs)  ->  RAWG lookup
