@@ -1,8 +1,14 @@
-# TeRRaDuDe RAWG Game Database – Eggdrop Tcl Script
+# TeRRaDuDe RAWG & Steam Game Database – Eggdrop Tcl Script
 
 **Version:** 1.0.14  
 **Platform:** Eggdrop 1.9.x / Tcl 8.6+  
 **Game Database:** [RAWG Video Games Database](https://rawg.io/)  
+**Supported Platforms:** PC, PlayStation, Xbox, Nintendo Switch, iOS and Android.
+
+NEW
+**Version:** 2.0.9  
+**Platform:** Eggdrop 1.9.x / Tcl 8.6+  
+**Game Database:** [RAWG Video Games Database](https://rawg.io/)  && [STEAM Video Games Database]
 **Supported Platforms:** PC, PlayStation, Xbox, Nintendo Switch, iOS and Android.
 
 ## Overview
